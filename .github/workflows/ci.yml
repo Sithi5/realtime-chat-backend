@@ -1,0 +1,16 @@
+name: Continuous Integration
+on: [push]
+jobs:
+  install-and-test:
+    name: Test Jest and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: 🧪 Jest tests
+        run: yarn test
+      - name: Lint
+        run: yarn lint
+      - name: format
+        run: yarn format
