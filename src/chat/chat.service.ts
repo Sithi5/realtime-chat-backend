@@ -1,6 +1,5 @@
 import { Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { Kafka, Consumer, Producer, Admin, KafkaMessage } from 'kafkajs';
-import { Readable } from 'stream';
+import { Kafka, Consumer, Producer, Admin } from 'kafkajs';
 
 @Injectable()
 export class ChatService implements OnApplicationShutdown {
@@ -41,11 +40,6 @@ export class ChatService implements OnApplicationShutdown {
 
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
-        console.log({
-          partition,
-          offset: message.offset,
-          value: message.value.toString(),
-        });
         const clients = this.roomSubscriptions.get(topic);
         if (clients) {
           const kafkaMessage = JSON.parse(message.value.toString());
@@ -70,7 +64,6 @@ export class ChatService implements OnApplicationShutdown {
     let connections = this.roomSubscriptions.get(topic);
     if (!connections) {
       connections = [];
-      console.log('addSubscription:', 'topic:', topic);
       this.roomSubscriptions.set(topic, connections);
     }
     connections.push(connection);
@@ -102,15 +95,6 @@ export class ChatService implements OnApplicationShutdown {
       });
     }
     try {
-      console.log(
-        'sendMessage:',
-        'topic:',
-        topic,
-        'message:',
-        message,
-        'senderName:',
-        senderName
-      );
       await this.producer.send({
         topic: topic,
         messages: [
