@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './send-message.dto';
+import { Public } from 'src/auth/auth.guard';
 
 @Controller('chat')
 export class ChatController {
@@ -20,6 +21,7 @@ export class ChatController {
     });
   }
 
+  @Public()
   @Post()
   async sendMessage(@Body() dto: SendMessageDto) {
     await this.chatService.sendMessage({
