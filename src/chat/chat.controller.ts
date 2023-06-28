@@ -12,19 +12,16 @@ export class ChatController {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
-    console.log('subscribe topic:', topic);
 
-    const stream = this.chatService.getKafkaMessageStream(topic);
-    stream.pipe(res);
+    this.chatService.addSubscription(topic, res);
 
     res.on('close', () => {
-      stream.unpipe(res);
+      this.chatService.removeSubscription(topic, res);
     });
   }
 
   @Post()
   async sendMessage(@Body() dto: SendMessageDto) {
-    console.log('sendMessage topic:', dto.topic);
     await this.chatService.sendMessage({
       message: dto.message,
       topic: dto.topic,

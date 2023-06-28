@@ -6,7 +6,9 @@ import { Readable } from 'stream';
 export class ChatService implements OnApplicationShutdown {
   private readonly kafka: Kafka;
   private producer: Producer;
+  private consumer: Consumer;
   private kafkaAdmin: Admin;
+  private roomSubscriptions: Map<string, any[]>;
 
   constructor() {
     this.kafka = new Kafka({
@@ -15,12 +17,44 @@ export class ChatService implements OnApplicationShutdown {
     });
     this.kafkaAdmin = this.kafka.admin();
     this.producer = this.kafka.producer();
+    this.consumer = this.kafka.consumer({
+      groupId: 'chat-consumer',
+      heartbeatInterval: 1000,
+    });
+    this.roomSubscriptions = new Map<string, any[]>();
     this.connect();
   }
 
   private async connect() {
     await this.kafkaAdmin.connect();
     await this.producer.connect();
+    await this.consumer.connect();
+    this.subscribeToChatRooms();
+  }
+
+  async subscribeToChatRooms() {
+    console.log('subscribeToChatRooms');
+    await this.consumer.subscribe({
+      topic: /^(chat|chat-.*)$/,
+      fromBeginning: true,
+    });
+
+    await this.consumer.run({
+      eachMessage: async ({ topic, partition, message }) => {
+        console.log({
+          partition,
+          offset: message.offset,
+          value: message.value.toString(),
+        });
+        const clients = this.roomSubscriptions.get(topic);
+        if (clients) {
+          const kafkaMessage = JSON.parse(message.value.toString());
+          clients.forEach((client) => {
+            client.write(`data: ${JSON.stringify(kafkaMessage)}\n\n`);
+          });
+        }
+      },
+    });
   }
 
   async topicExists(topicName: string): Promise<boolean> {
@@ -32,31 +66,27 @@ export class ChatService implements OnApplicationShutdown {
     }
   }
 
-  getKafkaMessageStream(topic: string): Readable {
-    const stream = new Readable({ objectMode: true });
-    stream._read = () => {
-      return;
-    };
-    const consumer = this.kafka.consumer({ groupId: 'chat-consumer' });
-    try {
-      consumer.connect();
-      consumer.subscribe({
-        topic: topic,
-        fromBeginning: false,
-      });
-      consumer.run({
-        eachMessage: async ({ topic, partition, message }) => {
-          stream.push('Hello');
-        },
-      });
-      stream.on('close', () => {
-        consumer.stop().catch(console.error);
-      });
-    } catch (e) {
-      console.log(e);
+  addSubscription(topic: string, connection: any) {
+    let connections = this.roomSubscriptions.get(topic);
+    if (!connections) {
+      connections = [];
+      console.log('addSubscription:', 'topic:', topic);
+      this.roomSubscriptions.set(topic, connections);
     }
+    connections.push(connection);
+  }
 
-    return stream;
+  removeSubscription(topic: string, connection: any) {
+    const connections = this.roomSubscriptions.get(topic);
+    if (connections) {
+      const index = connections.indexOf(connection);
+      if (index !== -1) {
+        connections.splice(index, 1);
+      }
+      if (connections.length === 0) {
+        this.roomSubscriptions.delete(topic);
+      }
+    }
   }
 
   async sendMessage(args: {
@@ -72,6 +102,15 @@ export class ChatService implements OnApplicationShutdown {
       });
     }
     try {
+      console.log(
+        'sendMessage:',
+        'topic:',
+        topic,
+        'message:',
+        message,
+        'senderName:',
+        senderName
+      );
       await this.producer.send({
         topic: topic,
         messages: [
@@ -91,5 +130,7 @@ export class ChatService implements OnApplicationShutdown {
 
   async onApplicationShutdown() {
     await this.producer.disconnect();
+    await this.consumer.disconnect();
+    await this.kafkaAdmin.disconnect();
   }
 }
