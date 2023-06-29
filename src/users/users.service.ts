@@ -12,12 +12,12 @@ export class UsersService {
     {
       userId: 1,
       email: 'malo@gmail.com',
-      password: 'qwerty',
+      password: 'qwerty12345',
     },
     {
       userId: 2,
       email: 'tom@gmail.com',
-      password: 'qwerty',
+      password: 'qwerty12345',
     },
   ];
 

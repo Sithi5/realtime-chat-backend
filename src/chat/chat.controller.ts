@@ -7,6 +7,7 @@ import { Public } from 'src/auth/auth.guard';
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @Public()
   @Get('subscribe/:topic')
   async subscribeToTopic(@Res() res, @Param('topic') topic: string) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -19,6 +20,12 @@ export class ChatController {
     res.on('close', () => {
       this.chatService.removeSubscription(topic, res);
     });
+  }
+
+  @Public()
+  @Get('getMessage/:topic')
+  async getMessages(@Param('topic') topic: string) {
+    return this.chatService.getRoomMessages(topic);
   }
 
   @Public()

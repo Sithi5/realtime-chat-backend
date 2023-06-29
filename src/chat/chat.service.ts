@@ -8,6 +8,7 @@ export class ChatService implements OnApplicationShutdown {
   private consumer: Consumer;
   private kafkaAdmin: Admin;
   private roomSubscriptions: Map<string, any[]>;
+  private roomMessages: Map<string, string[]>;
 
   constructor() {
     this.kafka = new Kafka({
@@ -18,9 +19,9 @@ export class ChatService implements OnApplicationShutdown {
     this.producer = this.kafka.producer();
     this.consumer = this.kafka.consumer({
       groupId: 'chat-consumer',
-      heartbeatInterval: 1000,
     });
     this.roomSubscriptions = new Map<string, any[]>();
+    this.roomMessages = new Map<string, string[]>();
     this.connect();
   }
 
@@ -31,8 +32,11 @@ export class ChatService implements OnApplicationShutdown {
     this.subscribeToChatRooms();
   }
 
+  getRoomMessages(topic: string): string[] {
+    return this.roomMessages.get(topic) || [];
+  }
+
   async subscribeToChatRooms() {
-    console.log('subscribeToChatRooms');
     await this.consumer.subscribe({
       topic: /^(chat|chat-.*)$/,
       fromBeginning: true,
@@ -40,9 +44,15 @@ export class ChatService implements OnApplicationShutdown {
 
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
+        const kafkaMessage = JSON.parse(message.value.toString());
+        let roomMessages = this.roomMessages.get(topic);
+        if (!roomMessages) {
+          roomMessages = [];
+          this.roomMessages.set(topic, roomMessages);
+        }
+        roomMessages.push(kafkaMessage);
         const clients = this.roomSubscriptions.get(topic);
         if (clients) {
-          const kafkaMessage = JSON.parse(message.value.toString());
           clients.forEach((client) => {
             client.write(`data: ${JSON.stringify(kafkaMessage)}\n\n`);
           });
