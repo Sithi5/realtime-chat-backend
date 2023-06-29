@@ -45,12 +45,6 @@ export class ChatService implements OnApplicationShutdown {
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         const kafkaMessage = JSON.parse(message.value.toString());
-        let roomMessages = this.roomMessages.get(topic);
-        if (!roomMessages) {
-          roomMessages = [];
-          this.roomMessages.set(topic, roomMessages);
-        }
-        roomMessages.push(kafkaMessage);
         const clients = this.roomSubscriptions.get(topic);
         if (clients) {
           clients.forEach((client) => {
@@ -105,18 +99,26 @@ export class ChatService implements OnApplicationShutdown {
       });
     }
     try {
+      const kafkaMessage = {
+        message: message,
+        senderName: senderName,
+        date: new Date().toISOString(),
+      };
+      const kafkaMessageString = JSON.stringify(kafkaMessage);
       await this.producer.send({
         topic: topic,
         messages: [
           {
-            value: JSON.stringify({
-              message: message,
-              senderName: senderName,
-              date: new Date().toISOString(),
-            }),
+            value: kafkaMessageString,
           },
         ],
       });
+      let roomMessages = this.roomMessages.get(topic);
+      if (!roomMessages) {
+        roomMessages = [];
+        this.roomMessages.set(topic, roomMessages);
+      }
+      roomMessages.push(kafkaMessageString);
     } catch (error) {
       console.error('Error sending message:', error);
     }
